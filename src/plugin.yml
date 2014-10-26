@@ -1,0 +1,12 @@
+name: Lottery
+version: 1.0
+description: Daegonner's Lottery Plugin
+author: SainttX
+
+main: com.daegonner.lottery.Lottery
+depend: [Vault]
+
+commands:
+  lottery:
+    description: Lottery commands
+    aliases: [lotto, lot]

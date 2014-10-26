@@ -1,0 +1,4 @@
+cost-per-ticket: 500
+seconds: 5400
+max-tickets-per-user: 100
+tax-percentage: 15
