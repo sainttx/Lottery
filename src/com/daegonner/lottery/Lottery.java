@@ -72,7 +72,7 @@ public class Lottery extends JavaPlugin {
             sender.sendMessage(PREFIX + "/lottery buy <tickets>");
             return false;
         } else if (!args[1].matches("[0-9]{0,12}")) {
-            sender.sendMessage(PREFIX + "&cYou must provide a valid number of tickets");
+            sender.sendMessage(PREFIX + ChatColor.RED + "You must provide a valid number of tickets");
             return false;
         }
 
@@ -85,6 +85,9 @@ public class Lottery extends JavaPlugin {
             return false;
         } else if (!economy.has(player, wantedTickets * ticketCost)) {
             sender.sendMessage(PREFIX + "&cYou don't have enough money!");
+            return false;
+        } else if (wantedTickets < 1) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "You must provide a valid number of tickets");
             return false;
         }
 
