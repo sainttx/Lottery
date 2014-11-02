@@ -4,7 +4,7 @@ description: Daegonner's Lottery Plugin
 author: SainttX
 
 main: com.daegonner.lottery.Lottery
-depend: [Vault]
+depend: [Core]
 
 commands:
   lottery:

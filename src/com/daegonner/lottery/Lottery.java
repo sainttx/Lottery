@@ -1,6 +1,8 @@
 package com.daegonner.lottery;
 
-import net.milkbowl.vault.economy.Economy;
+import com.daegonner.core.data.Configuration;
+import com.daegonner.core.hooks.VaultHook;
+import com.daegonner.core.util.TimeUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
@@ -23,6 +25,16 @@ public class Lottery extends JavaPlugin {
     private Map<UUID, Integer> tickets = new HashMap<UUID, Integer>();
 
     /*
+     * A list of previous winners
+     */
+    private List<String> winners;
+
+    /*
+     * The YML file containing all winners
+     */
+    private Configuration winnersCfg = new Configuration(this, "winners.yml");
+
+    /*
      * The amount of time left until the draw
      */
     private int timeLeft;
@@ -33,11 +45,6 @@ public class Lottery extends JavaPlugin {
     private Random findWinner = new Random();
 
     /*
-     * Vault economy implementation
-     */
-    private Economy economy;
-
-    /*
      * Prefixes for messages
      */
     private final String PREFIX = color("&6[LOTTERY]&r ");
@@ -46,28 +53,34 @@ public class Lottery extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         this.timeLeft = getConfig().getInt("seconds");
-        getServer().getScheduler().scheduleSyncRepeatingTask(this, new LotteryTimer(), 0L, 20L);
+        this.winners = winnersCfg.getStringList("winners");
 
-        economy = getServer().getServicesManager().getRegistration(Economy.class).getProvider();
+        getServer().getScheduler().scheduleSyncRepeatingTask(this, new LotteryTimer(), 0L, 20L);
     }
 
     @Override
     public void onDisable() {
         end();
         getServer().getScheduler().cancelTasks(this);
+
+        winnersCfg.set("winners", this.winners);
+        winnersCfg.saveConfiguration();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 0 || !args[0].equalsIgnoreCase("buy")) {
+        if (args.length == 0 || (!args[0].equalsIgnoreCase("buy") && !args[0].equalsIgnoreCase("winners"))) {
             double ticketPrice = getConfig().getDouble("cost-per-ticket");
             sender.sendMessage(PREFIX + color("Draw in &c" + TimeUtil.formatDateDiff(getEndDate())));
             sender.sendMessage(PREFIX + color("Buy a ticket for &c$" + ticketPrice + " &fwith &c/lottery buy"));
             sender.sendMessage(PREFIX + color("Current jackpot is &c$" + (getTotalTickets() * ticketPrice)));
             sender.sendMessage(PREFIX + color("You currently have &c" + getTickets(sender) + " tickets"));
+            sender.sendMessage(PREFIX + color("View the last 10 winners with &c/lotto winners"));
             return false;
         } else if (!(sender instanceof Player)) {
             sender.sendMessage("Only players can buy lottery tickets");
+        } else if (args[0].equalsIgnoreCase("winners")) {
+            return winners(sender);
         } else if (args.length != 2) {
             sender.sendMessage(PREFIX + "/lottery buy <tickets>");
             return false;
@@ -83,8 +96,8 @@ public class Lottery extends JavaPlugin {
         if (wantedTickets + getTickets(player) > getConfig().getInt("max-tickets-per-user")) {
             sender.sendMessage(PREFIX + ChatColor.RED + "You may only purchase a max of " + getConfig().getInt("max-tickets-per-user") + " tickets!");
             return false;
-        } else if (!economy.has(player, wantedTickets * ticketCost)) {
-            sender.sendMessage(PREFIX + "&cYou don't have enough money!");
+        } else if (!VaultHook.getEconomy().has(player, wantedTickets * ticketCost)) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "You don't have enough money!");
             return false;
         } else if (wantedTickets < 1) {
             sender.sendMessage(PREFIX + ChatColor.RED + "You must provide a valid number of tickets");
@@ -92,9 +105,26 @@ public class Lottery extends JavaPlugin {
         }
 
         this.addTickets(player, wantedTickets);
-        economy.withdrawPlayer(player, wantedTickets * ticketCost);
+        VaultHook.getEconomy().withdrawPlayer(player, wantedTickets * ticketCost);
         sender.sendMessage(PREFIX + color("You purchased &c" + wantedTickets + " &ftickets for &c$" + (wantedTickets * ticketCost)));
         return false;
+    }
+
+    /*
+     * Shows the sender a list of the last 10 winners and their pots
+     */
+    private boolean winners(CommandSender sender) {
+        sender.sendMessage(PREFIX + "Last 10 winnings:");
+
+        if (this.winners.isEmpty()) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "There have not been any winners!");
+        } else {
+            List<String> lastWinners = winners.subList(Math.max(winners.size() - 10, 0), winners.size());
+            for (String winner : lastWinners) {
+                sender.sendMessage(PREFIX + winner);
+            }
+        }
+        return true;
     }
 
     /*
@@ -168,7 +198,8 @@ public class Lottery extends JavaPlugin {
         double trueWinnings = winnings - (winnings * (tax / 100));
 
         // Give player money and announce
-        economy.depositPlayer(winner, trueWinnings);
+        VaultHook.getEconomy().depositPlayer(winner, trueWinnings);
+        winners.add(winner.getName() + " - $" + winnings);
         Bukkit.broadcastMessage(PREFIX + color("&c" + winner.getName() + " &fhas won the lottery for &c$" + winnings + " &fwith &c" + numTickets + " tickets &fout of a total &c" + totalTickets));
 
         if (winner.isOnline()) {
